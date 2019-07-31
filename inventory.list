@@ -1,0 +1,5 @@
+# [example-target]
+# 192.168.1.100
+
+[attackbox]
+10.200.10.105 ansible_connection=ssh ansible_ssh_user=root

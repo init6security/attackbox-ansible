@@ -1,0 +1,126 @@
+- name: Attack Box
+  hosts: attackbox
+  become: yes
+
+  tasks:
+
+    - name: Install libtspi1 needed for eCryptFS
+      apt:
+        deb: http://http.us.debian.org/debian/pool/main/t/trousers/libtspi1_0.3.14+fixed1-1_amd64.deb
+
+    - name: Install libecryptfs needed for eCryptFS
+      apt:
+        deb: http://http.us.debian.org/debian/pool/main/e/ecryptfs-utils/libecryptfs1_111-4_amd64.deb
+ 
+    - name: Install eCryptFS 
+      apt:
+        deb: http://http.us.debian.org/debian/pool/main/e/ecryptfs-utils/ecryptfs-utils_111-4_amd64.deb
+
+    - name: Update APT Cache
+      apt: update_cache=yes
+
+    - name: Add Local Kali Repo
+      apt_repository: 
+        repo: 'deb http://kali.sittingduck.info/kali kali-rolling main non-free contrib'
+        state: present
+
+    - name: Add an Kali APT signing key
+      apt_key:
+        url: https://archive.kali.org/archive-key.asc
+        state: present
+
+    - name: Update APT Cache (After Kali Repo Added)
+      apt: update_cache=yes
+
+    - name: Install APT-available Libraries
+      apt:
+        pkg:
+          - build-essential
+          - default-jre
+          - default-jdk
+          - libpcap-dev
+          - libpq-dev
+          - libsqlite3-dev
+          - zlib1g-dev
+          - python-setuptools
+          - python-dev
+          - python3-dev
+          - python-pip
+          - python3-pip
+          - python-m2crypto # Empire Dep
+          - python-pefile # Empire Dep
+        state: present
+
+    - name: Install APT-available Tools
+      apt:
+        pkg:
+          - whois
+          - golang
+          - mingw-w64
+          - rsync
+          - screen
+          - git
+          - lsof
+          - tcpdump
+          - sqlite3
+          - ldap-utils
+          - python3
+          - metasploit-framework
+        state: present
+
+    - name: PIP Install Libraries
+      pip: name={{item}} state=present
+      with_items:
+        - ldapdomaindump
+        - cffi
+        - pycrypto
+        - iptools
+        - pyasn1
+
+    - name: Clone Nmap
+      git: repo=https://github.com/nmap/nmap.git dest=/opt/nmap
+      register: nmap
+
+    - name: Build and install Nmap
+      #when: nmap.changed
+      register: nmap_build
+      shell: "{{ item }}"
+      failed_when: "'Stop' in nmap_build.stderr"
+      args:
+        chdir: /opt/nmap/
+        executable: "/bin/bash"
+      with_items:
+        - ./configure
+        - make
+        - make -C ncat/
+        - make install
+        - git clean -df
+
+    - name: Clone Impacket
+      git: repo=https://github.com/CoreSecurity/impacket.git dest=/opt/impacket
+      register: impacket
+
+    - name: Install Impacket library only if repository changed
+      when: impacket.changed
+      command: python setup.py install chdir=/opt/impacket/
+
+    - name: Clone Post Exploitation bins
+      git: repo=https://github.com/mubix/post-exploitation.git dest=/opt/post-exploitation
+
+    - name: Clone Powershell Empire
+      git: repo=https://github.com/PowerShellEmpire/Empire.git dest=/opt/empire
+
+    - stat: path=/opt/empire/data/empire.db
+      register: empire_db
+
+    - name: Setup Empire Database if not setup
+      when: empire_db.stat.exists == False
+      shell: "{{ item }}"
+      environment:
+        STAGING_KEY: RANDOM
+      args:
+        chdir: /opt/empire/setup/
+        executable: "/bin/bash"
+      with_items:
+        - ./install.sh
+

@@ -19,7 +19,7 @@
     - name: Update APT Cache
       apt: update_cache=yes
 
-    - name: Add Local Kali Repo
+    - name: Add Kali Repo
       apt_repository: 
         repo: 'deb http://http.kali.org/kali kali-rolling main non-free contrib'
         state: present

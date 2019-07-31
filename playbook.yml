@@ -21,7 +21,7 @@
 
     - name: Add Local Kali Repo
       apt_repository: 
-        repo: 'deb http://kali.sittingduck.info/kali kali-rolling main non-free contrib'
+        repo: 'deb http://http.kali.org/kali kali-rolling main non-free contrib'
         state: present
 
     - name: Add an Kali APT signing key
@@ -36,8 +36,6 @@
       apt:
         pkg:
           - build-essential
-          - default-jre
-          - default-jdk
           - libpcap-dev
           - libpq-dev
           - libsqlite3-dev
@@ -82,7 +80,7 @@
       register: nmap
 
     - name: Build and install Nmap
-      #when: nmap.changed
+      when: nmap.changed
       register: nmap_build
       shell: "{{ item }}"
       failed_when: "'Stop' in nmap_build.stderr"

@@ -1,8 +1,10 @@
 ---
-# Distro packages removed before their source builds take over on PATH (Kali/Parrot).
+# Distro copies of source-built *standalone tools* removed so the source build is
+# unambiguous. NOTE: we intentionally do NOT purge python3-impacket — it's a
+# shared library that Kali's own tools (coercer, netexec, mitm6, …) depend on, so
+# purging it cascades and removes them. The source Impacket (pipx) lives in its
+# own venv and its scripts win via /usr/local/bin regardless.
 source_tools_purge:
-  - python3-impacket
-  - impacket-scripts
   - netexec
   - crackmapexec
   - responder

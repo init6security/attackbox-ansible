@@ -1,0 +1,36 @@
+---
+# Precompiled Windows offensive binaries. On Kali/Parrot these come from the
+# `kali-tools-windows-resources` package (roles/tools_packages). On Debian/Ubuntu
+# we clone them from source into the unencrypted data dir.
+- name: Ensure the windows-resources directory exists
+  ansible.builtin.file:
+    path: "{{ windows_resources_dir }}"
+    state: directory
+    mode: "0755"
+  when: build_from_source | bool
+
+- name: Clone windows-resource repos
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ windows_resources_dir }}/{{ item.name }}"
+    depth: 1
+    update: true
+  loop: "{{ windows_resource_repos }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: build_from_source | bool
+
+- name: Create mimikatz directory
+  ansible.builtin.file:
+    path: "{{ windows_resources_dir }}/mimikatz"
+    state: directory
+    mode: "0755"
+  when: build_from_source | bool
+
+- name: Download and extract latest mimikatz release
+  ansible.builtin.unarchive:
+    src: "{{ mimikatz_zip_url }}"
+    dest: "{{ windows_resources_dir }}/mimikatz"
+    remote_src: true
+    creates: "{{ windows_resources_dir }}/mimikatz/x64/mimikatz.exe"
+  when: build_from_source | bool

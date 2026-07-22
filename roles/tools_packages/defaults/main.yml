@@ -1,0 +1,61 @@
+---
+# Tools available as packages on EVERY supported distro (Debian, Ubuntu, Kali,
+# Parrot). Installed via apt everywhere.
+apt_universal_tools:
+  - nmap                      # NSE scripts ship in /usr/share/nmap/scripts
+  - ncat
+  - proxychains4
+  - smbclient
+  - cifs-utils
+  - nfs-common
+  - ldap-utils
+  - whois
+  - tcpdump
+  - bind9-dnsutils            # dig/host/nslookup
+  - hydra
+  - sshuttle
+  - dirsearch
+  - ffuf
+  - gobuster
+
+# Offensive tools packaged only in the Kali/Parrot repos. Installed via apt when
+# the target is Kali/Parrot; on Debian/Ubuntu these are built from source
+# (roles/tools_source) instead. Keep this list in sync with the source specs.
+apt_offensive_tools:
+  - seclists
+  - evil-winrm
+  - certipy-ad
+  - bloodhound.py
+  - mitmproxy
+  - feroxbuster
+  - nuclei
+  - httpx-toolkit
+  - chisel
+  - padbuster
+  - wpscan
+  - mitm6
+  - krbrelayx
+  - coercer
+  - enum4linux-ng
+  - bloodhound
+  - neo4j
+  - sliver
+  - subfinder
+  - dnsx
+  - naabu
+  - theharvester
+  - hekatomb
+  - bloodyad
+  - powersploit
+  - peass
+  - mimikatz
+
+# Packaged on Kali but not always on Parrot — installed only on Kali.
+# (kali-tools-windows-resources is a Kali metapackage; on Parrot the Windows
+# binaries come from roles/windows_resources instead.)
+apt_offensive_tools_kali_only:
+  - gowitness
+  - ligolo-ng
+  - eyewitness
+  - rubeus
+  - kali-tools-windows-resources

@@ -1,0 +1,59 @@
+---
+# Distro detection + repositories + base packages.
+#
+# We support Kali, Parrot, plain Debian, and Ubuntu. The offensive toolset is
+# only packaged in the Kali/Parrot repos, so on Debian/Ubuntu we build those
+# tools from source instead — we deliberately do NOT add Kali/Parrot repos to a
+# Debian/Ubuntu host (that "frankendebian" mix breaks things).
+- name: Set distro convenience facts
+  ansible.builtin.set_fact:
+    is_kali: "{{ ansible_distribution == 'Kali' }}"
+    is_parrot: "{{ ansible_distribution == 'Parrot' }}"
+    is_debian: "{{ ansible_distribution == 'Debian' }}"
+    is_ubuntu: "{{ ansible_distribution == 'Ubuntu' }}"
+
+- name: Derive install-path facts
+  ansible.builtin.set_fact:
+    # Kali/Parrot ship the offensive tools as packages.
+    is_kali_parrot: "{{ is_kali or is_parrot }}"
+    # Debian/Ubuntu do not — build offensive tools from source there.
+    build_from_source: "{{ is_debian or is_ubuntu }}"
+
+- name: Enable the Ubuntu 'universe' component (needed for many tools)
+  ansible.builtin.apt_repository:
+    repo: "deb http://archive.ubuntu.com/ubuntu {{ ansible_distribution_release }} universe"
+    state: present
+    filename: attackbox-universe
+  when: is_ubuntu
+
+- name: Update APT cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install base packages and build dependencies
+  ansible.builtin.apt:
+    name: "{{ apt_base_packages }}"
+    state: present
+    install_recommends: false
+  register: base_pkgs
+  retries: 2
+  delay: 5
+  until: base_pkgs is succeeded
+
+- name: Ensure pipx global bin dir exists
+  ansible.builtin.file:
+    path: "{{ pipx_bin_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Put the pipx/go global bin dir on PATH for login shells
+  ansible.builtin.copy:
+    dest: /etc/profile.d/attackbox-path.sh
+    mode: "0644"
+    content: |
+      # Added by attackbox-ansible: expose source-built tool wrappers
+      case ":$PATH:" in
+        *":{{ pipx_bin_dir }}:"*) ;;
+        *) export PATH="{{ pipx_bin_dir }}:$PATH" ;;
+      esac

@@ -1,0 +1,53 @@
+---
+# Metasploit from the official Rapid7 *nightly* apt repo (apt.metasploit.com),
+# not the distro package.
+- name: Remove distro metasploit-framework (nightly is authoritative)
+  ansible.builtin.apt:
+    name: metasploit-framework
+    state: absent
+  when: metasploit_nightly | bool
+
+- name: Add Rapid7 signing key
+  ansible.builtin.get_url:
+    url: "{{ metasploit_key_url }}"
+    dest: /usr/share/keyrings/metasploit.asc
+    mode: "0644"
+  when: metasploit_nightly | bool
+
+- name: Add Rapid7 nightly repository
+  ansible.builtin.apt_repository:
+    repo: "{{ metasploit_repo }}"
+    filename: metasploit-framework
+    state: present
+  when: metasploit_nightly | bool
+
+- name: Pin metasploit-framework to the Rapid7 repo
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/metasploit-framework.pref
+    mode: "0644"
+    content: |
+      Package: metasploit-framework
+      Pin: origin apt.metasploit.com
+      Pin-Priority: 1001
+  when: metasploit_nightly | bool
+
+- name: Install Metasploit Framework
+  ansible.builtin.apt:
+    name: metasploit-framework
+    state: present
+    update_cache: true
+  register: msf_install
+  retries: 2
+  delay: 5
+  until: msf_install is succeeded
+
+# Database setup needs a running init system; best-effort so containers/CI don't
+# fail the run. On a real box this brings up the bundled PostgreSQL for msf.
+- name: Initialise the Metasploit database
+  ansible.builtin.command: msfdb init
+  args:
+    creates: /root/.msf4/database.yml
+  register: msfdb
+  failed_when: false
+  changed_when: msfdb.rc == 0
+  when: metasploit_db_init | bool

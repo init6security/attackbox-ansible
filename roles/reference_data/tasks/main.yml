@@ -1,0 +1,27 @@
+---
+- name: Ensure the reference/data directory exists (unencrypted)
+  ansible.builtin.file:
+    path: "{{ data_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Clone reference/data repos
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ data_dir }}/{{ item.name }}"
+    depth: 1
+    update: true
+  loop: "{{ reference_repos }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+# SecLists is the `seclists` package on Kali/Parrot (/usr/share/seclists); on
+# Debian/Ubuntu clone it (large — tagged heavy so smoke runs can skip it).
+- name: Clone SecLists (Debian/Ubuntu)
+  ansible.builtin.git:
+    repo: https://github.com/danielmiessler/SecLists.git
+    dest: "{{ data_dir }}/SecLists"
+    depth: 1
+    update: true
+  when: build_from_source | bool
+  tags: [heavy]

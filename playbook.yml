@@ -1,124 +1,62 @@
+---
+# ============================================================================
+# attackbox-ansible — build a pentest/red-team box on Kali, Parrot, or Debian
+# ----------------------------------------------------------------------------
+# Connect as root (the example inventory + the docker test harness both do).
+# Operator-facing config lives in group_vars/all.yml; each role documents its
+# own defaults under roles/<name>/defaults/main.yml.
+#
+# Run everything:   ansible-playbook -i inventory.list playbook.yml
+# Fast smoke run:   ansible-playbook -i inventory.list playbook.yml --skip-tags heavy
+# Just the crypto:  ansible-playbook -i inventory.list playbook.yml --tags crypto
+# ============================================================================
 - name: Attack Box
   hosts: attackbox
-  become: yes
+  gather_facts: false          # minimal images may lack python3 — bootstrap first
+  become: "{{ attackbox_become | default(false) }}"
 
-  tasks:
+  vars:
+    # Random per-host passphrase for the encrypted volume. The password lookup
+    # writes the plaintext to credentials/<host>/gocryptfs.txt on the CONTROL
+    # node (git-ignored) and returns the value.
+    gocryptfs_passphrase: >-
+      {{ lookup('password',
+                'credentials/' + inventory_hostname + '/gocryptfs.txt length=32 chars=ascii_letters,digits') }}
 
-    - name: Install libtspi1 needed for eCryptFS
-      apt:
-        deb: http://http.us.debian.org/debian/pool/main/t/trousers/libtspi1_0.3.14+fixed1-1_amd64.deb
+  pre_tasks:
+    - name: Bootstrap python3 so Ansible modules can run (raw, no facts yet)
+      ansible.builtin.raw: >-
+        test -e /usr/bin/python3 || {
+          command -v apt-get >/dev/null 2>&1 &&
+          (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y python3);
+        }
+      changed_when: false
+      tags: always
 
-    - name: Install libecryptfs needed for eCryptFS
-      apt:
-        deb: http://http.us.debian.org/debian/pool/main/e/ecryptfs-utils/libecryptfs1_111-4_amd64.deb
- 
-    - name: Install eCryptFS 
-      apt:
-        deb: http://http.us.debian.org/debian/pool/main/e/ecryptfs-utils/ecryptfs-utils_111-4_amd64.deb
+    - name: Gather facts now that python3 is present
+      ansible.builtin.setup:
+      tags: always
 
-    - name: Update APT Cache
-      apt: update_cache=yes
-
-    - name: Add Kali Repo
-      apt_repository: 
-        repo: 'deb http://http.kali.org/kali kali-rolling main non-free contrib'
-        state: present
-
-    - name: Add an Kali APT signing key
-      apt_key:
-        url: https://archive.kali.org/archive-key.asc
-        state: present
-
-    - name: Update APT Cache (After Kali Repo Added)
-      apt: update_cache=yes
-
-    - name: Install APT-available Libraries
-      apt:
-        pkg:
-          - build-essential
-          - libpcap-dev
-          - libpq-dev
-          - libsqlite3-dev
-          - zlib1g-dev
-          - python-setuptools
-          - python-dev
-          - python3-dev
-          - python-pip
-          - python3-pip
-          - python-m2crypto # Empire Dep
-          - python-pefile # Empire Dep
-        state: present
-
-    - name: Install APT-available Tools
-      apt:
-        pkg:
-          - whois
-          - golang
-          - mingw-w64
-          - rsync
-          - screen
-          - git
-          - lsof
-          - tcpdump
-          - sqlite3
-          - ldap-utils
-          - python3
-          - metasploit-framework
-        state: present
-
-    - name: PIP Install Libraries
-      pip: name={{item}} state=present
-      with_items:
-        - ldapdomaindump
-        - cffi
-        - pycrypto
-        - iptools
-        - pyasn1
-
-    - name: Clone Nmap
-      git: repo=https://github.com/nmap/nmap.git dest=/opt/nmap
-      register: nmap
-
-    - name: Build and install Nmap
-      when: nmap.changed
-      register: nmap_build
-      shell: "{{ item }}"
-      failed_when: "'Stop' in nmap_build.stderr"
-      args:
-        chdir: /opt/nmap/
-        executable: "/bin/bash"
-      with_items:
-        - ./configure
-        - make
-        - make -C ncat/
-        - make install
-        - git clean -df
-
-    - name: Clone Impacket
-      git: repo=https://github.com/CoreSecurity/impacket.git dest=/opt/impacket
-      register: impacket
-
-    - name: Install Impacket library only if repository changed
-      when: impacket.changed
-      command: python setup.py install chdir=/opt/impacket/
-
-    - name: Clone Post Exploitation bins
-      git: repo=https://github.com/mubix/post-exploitation.git dest=/opt/post-exploitation
-
-    - name: Clone Powershell Empire
-      git: repo=https://github.com/PowerShellEmpire/Empire.git dest=/opt/empire
-
-    - stat: path=/opt/empire/data/empire.db
-      register: empire_db
-
-    - name: Setup Empire Database if not setup
-      when: empire_db.stat.exists == False
-      shell: "{{ item }}"
-      environment:
-        STAGING_KEY: RANDOM
-      args:
-        chdir: /opt/empire/setup/
-        executable: "/bin/bash"
-      with_items:
-        - ./install.sh
-
+  roles:
+    - role: common
+      tags: [base]
+    - role: gocryptfs
+      tags: [crypto]
+    - role: tools_packages
+      tags: [pkgtools]
+    - role: metasploit
+      tags: [metasploit, heavy]
+      when: install_metasploit | bool
+    - role: tools_source
+      tags: [source]
+    - role: empire
+      tags: [empire]          # clone runs in smoke; only install.sh is tagged heavy (in-role)
+    - role: reference_data
+      tags: [data]
+    - role: windows_resources
+      tags: [windows-resources, heavy]     # bulky binary collections (Debian/Ubuntu)
+    - role: dotfiles
+      tags: [dotfiles]
+    - role: ssh_hardening
+      tags: [ssh]
+      when: harden_ssh | bool

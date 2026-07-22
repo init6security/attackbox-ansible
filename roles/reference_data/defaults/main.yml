@@ -1,0 +1,6 @@
+---
+# Large public reference repos cloned OUTSIDE the encrypted volume (to save space
+# in it). SecLists is a distro package (/usr/share/seclists) and is not cloned.
+reference_repos:
+  - { name: post-exploitation,    repo: 'https://github.com/mubix/post-exploitation.git' }
+  - { name: PayloadsAllTheThings, repo: 'https://github.com/swisskyrepo/PayloadsAllTheThings.git' }

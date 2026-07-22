@@ -1,0 +1,12 @@
+---
+- name: Install .screenrc for root
+  ansible.builtin.copy:
+    src: screenrc
+    dest: /root/.screenrc
+    mode: "0644"
+
+- name: Install .tmux.conf for root
+  ansible.builtin.copy:
+    src: tmux.conf
+    dest: /root/.tmux.conf
+    mode: "0644"

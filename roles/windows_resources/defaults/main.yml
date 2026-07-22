@@ -1,0 +1,7 @@
+---
+windows_resources_dir: "{{ data_dir }}/windows-resources"
+windows_resource_repos:
+  - { name: SharpCollection, repo: "https://github.com/Flangvik/SharpCollection.git" }  # Rubeus/SharpHound/Seatbelt/Certify (precompiled)
+  - { name: PowerSploit,     repo: "https://github.com/PowerShellMafia/PowerSploit.git" }  # PowerView, etc.
+  - { name: PEASS-ng,        repo: "https://github.com/carlospolop/PEASS-ng.git" }  # winPEAS/linPEAS
+mimikatz_zip_url: https://github.com/gentilkiwi/mimikatz/releases/latest/download/mimikatz_trunk.zip

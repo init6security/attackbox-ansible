@@ -1,0 +1,19 @@
+#!/bin/bash
+# Mount the encrypted attackbox volume. Managed by attackbox-ansible.
+set -euo pipefail
+
+CIPHER="{{ gocryptfs_cipher_dir }}"
+MOUNT="{{ gocryptfs_mount }}"
+
+if mountpoint -q "$MOUNT"; then
+  echo "[*] $MOUNT is already mounted."
+  exit 0
+fi
+
+{% if gocryptfs_store_key_on_target %}
+# Passphrase key stored on this host (root-only).
+exec gocryptfs -q -passfile "{{ gocryptfs_keyfile }}" "$CIPHER" "$MOUNT"
+{% else %}
+# No key stored on this host — prompt the operator for the passphrase.
+exec gocryptfs -q "$CIPHER" "$MOUNT"
+{% endif %}

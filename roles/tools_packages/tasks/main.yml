@@ -1,0 +1,30 @@
+---
+- name: Install universal package tools (all distros)
+  ansible.builtin.apt:
+    name: "{{ apt_universal_tools }}"
+    state: present
+    install_recommends: false
+  register: pkg_universal
+  retries: 2
+  delay: 5
+  until: pkg_universal is succeeded
+
+# On Kali/Parrot the offensive toolset is packaged — install it. On Debian/Ubuntu
+# these come from source (roles/tools_source) and this block is skipped.
+- name: Install offensive package tools (Kali/Parrot)
+  ansible.builtin.apt:
+    name: "{{ apt_offensive_tools }}"
+    state: present
+    install_recommends: false
+  register: pkg_offensive
+  retries: 2
+  delay: 5
+  until: pkg_offensive is succeeded
+  when: is_kali_parrot | bool
+
+- name: Install Kali-only package tools
+  ansible.builtin.apt:
+    name: "{{ apt_offensive_tools_kali_only }}"
+    state: present
+    install_recommends: false
+  when: is_kali | bool

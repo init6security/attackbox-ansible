@@ -1,0 +1,122 @@
+---
+# Post-deploy assertions. Run by test/run.sh; also usable standalone:
+#   ansible-playbook -i test/inventory.docker.ini test/verify.yml -e verify_heavy=true
+- name: Verify attackbox deployment
+  hosts: attackbox
+  gather_facts: false
+
+  # verify.yml lives in test/, so the repo-root group_vars/all.yml isn't
+  # auto-loaded — pull in the shared paths (gocryptfs_mount, data_dir, …).
+  vars_files:
+    - ../group_vars/all.yml
+
+  vars:
+    verify_heavy: false
+
+    expected_commands_base:
+      - nmap
+      - ncat
+      - hydra
+      - evil-winrm
+      - nxc                       # NetExec (source)
+      - responder                 # source wrapper
+      - sqlmap                    # source symlink
+      - nikto                     # source symlink
+      - secretsdump.py            # Impacket (source, via pipx — upstream script names)
+      - wmiexec.py
+      # AD/cred/recon additions (apt on Kali/Parrot, source on Debian/Ubuntu) —
+      # names chosen to be identical across distros.
+      - mitm6
+      - coercer
+      - ldapdomaindump
+      - pypykatz
+      - lsassy
+      - kerbrute                  # go (every distro)
+      - nuclei
+      - feroxbuster
+
+    expected_dirs_base:
+      - "{{ gocryptfs_mount }}/impacket"
+      - "{{ gocryptfs_mount }}/netexec"
+      - "{{ gocryptfs_mount }}/responder"
+      - "{{ gocryptfs_mount }}/sqlmap"
+      - "{{ gocryptfs_mount }}/nikto"
+      - "{{ gocryptfs_mount }}/empire"
+      - "{{ data_dir }}/PayloadsAllTheThings"
+      - "{{ data_dir }}/post-exploitation"
+
+    expected_commands_heavy:
+      - msfconsole
+      - hashcat
+      - john
+
+    expected_files_heavy:
+      - "{{ gocryptfs_mount }}/hashcat/hashcat"
+      - "{{ gocryptfs_mount }}/john/run/john"
+
+  tasks:
+    - name: Encrypted volume is mounted at {{ gocryptfs_mount }}
+      ansible.builtin.command: "mountpoint -q {{ gocryptfs_mount }}"
+      changed_when: false
+
+    - name: gocryptfs cipher config exists
+      ansible.builtin.stat:
+        path: "{{ gocryptfs_cipher_dir }}/gocryptfs.conf"
+      register: cipher_conf
+      failed_when: not cipher_conf.stat.exists
+
+    - name: Base tools are on PATH
+      ansible.builtin.shell: "command -v {{ item }}"
+      changed_when: false
+      loop: "{{ expected_commands_base }}"
+
+    - name: Expected directories exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: dir_check
+      failed_when: not dir_check.stat.exists
+      loop: "{{ expected_dirs_base }}"
+
+    - name: Impacket runs from its pipx venv
+      ansible.builtin.command: "secretsdump.py -h"
+      changed_when: false
+
+    - name: NetExec runs
+      ansible.builtin.command: "nxc --version"
+      register: nxc_ver
+      changed_when: false
+      # nxc exits non-zero on its first run (it creates ~/.nxc), but still
+      # prints its version banner — treat empty output as the real failure.
+      failed_when: nxc_ver.stdout | trim == ""
+
+    # ---- heavy (full mode only) ----
+    - name: Heavy tools are on PATH
+      ansible.builtin.shell: "command -v {{ item }}"
+      changed_when: false
+      loop: "{{ expected_commands_heavy }}"
+      when: verify_heavy | bool
+
+    - name: Heavy build artifacts exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: heavy_files
+      failed_when: not heavy_files.stat.exists
+      loop: "{{ expected_files_heavy }}"
+      when: verify_heavy | bool
+
+    - name: Metasploit is the Rapid7 nightly build
+      ansible.builtin.shell: "msfconsole --version 2>/dev/null | head -1"
+      register: msf_ver
+      changed_when: false
+      when: verify_heavy | bool
+
+    - name: John was built with the generic crypt(3) format (libcrypt-dev)
+      ansible.builtin.shell: "set -o pipefail; john --list=formats | tr ',' '\\n' | grep -qxE ' *crypt'"
+      changed_when: false
+      when: verify_heavy | bool
+
+    - name: Show summary
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} OK —
+          /opt mounted, source tools present{{ ' + heavy builds' if verify_heavy | bool else '' }}.

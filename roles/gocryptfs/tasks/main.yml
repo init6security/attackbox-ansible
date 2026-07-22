@@ -1,0 +1,141 @@
+---
+# ----------------------------------------------------------------------------
+# Encrypted {{ gocryptfs_mount }} via gocryptfs.
+#
+# gocryptfs (unlike eCryptFS) needs a separate cipher dir and mountpoint:
+#   {{ gocryptfs_cipher_dir }}  -> encrypted blobs on the real disk
+#   {{ gocryptfs_mount }}       -> plaintext view (source tools + loot live here)
+#
+# Order matters: we init + mount BEFORE anything is written to /opt, so all
+# source-built tools land inside the encrypted volume.
+# ----------------------------------------------------------------------------
+- name: Ensure gocryptfs and fuse are installed
+  ansible.builtin.apt:
+    name:
+      - gocryptfs
+      - fuse3
+    state: present
+
+- name: Create the cipher directory (encrypted blobs)
+  ansible.builtin.file:
+    path: "{{ gocryptfs_cipher_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Create the mountpoint
+  ansible.builtin.file:
+    path: "{{ gocryptfs_mount }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create the key directory on the target
+  ansible.builtin.file:
+    path: "{{ gocryptfs_keyfile | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: gocryptfs_store_key_on_target | bool
+
+- name: Write the passphrase key file on the target (root-only)
+  ansible.builtin.copy:
+    dest: "{{ gocryptfs_keyfile }}"
+    content: "{{ gocryptfs_passphrase }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: gocryptfs_store_key_on_target | bool
+
+- name: Check whether the encrypted volume is already initialised
+  ansible.builtin.stat:
+    path: "{{ gocryptfs_cipher_dir }}/gocryptfs.conf"
+  register: gocryptfs_conf
+
+# gocryptfs -init reads the passphrase from a passfile. When we don't persist a
+# key on the target we hand it in via /dev/stdin so it never touches disk.
+- name: Initialise the gocryptfs volume (key on target)
+  ansible.builtin.command:
+    cmd: "gocryptfs -init -q -passfile {{ gocryptfs_keyfile }} {{ gocryptfs_cipher_dir }}"
+  when:
+    - not gocryptfs_conf.stat.exists
+    - gocryptfs_store_key_on_target | bool
+  no_log: true
+
+- name: Initialise the gocryptfs volume (key only on control node)
+  ansible.builtin.shell:
+    cmd: "printf '%s' '{{ gocryptfs_passphrase }}' | gocryptfs -init -q -passfile /dev/stdin {{ gocryptfs_cipher_dir }}"
+  when:
+    - not gocryptfs_conf.stat.exists
+    - not gocryptfs_store_key_on_target | bool
+  no_log: true
+
+- name: Check whether {{ gocryptfs_mount }} is already mounted
+  ansible.builtin.command: "mountpoint -q {{ gocryptfs_mount }}"
+  register: opt_mounted
+  changed_when: false
+  failed_when: false
+
+- name: Mount the encrypted volume (key on target)
+  ansible.builtin.command:
+    cmd: "gocryptfs -q -passfile {{ gocryptfs_keyfile }} {{ gocryptfs_cipher_dir }} {{ gocryptfs_mount }}"
+  when:
+    - opt_mounted.rc != 0
+    - gocryptfs_store_key_on_target | bool
+  no_log: true
+
+- name: Mount the encrypted volume (key only on control node)
+  ansible.builtin.shell:
+    cmd: "printf '%s' '{{ gocryptfs_passphrase }}' | gocryptfs -q -passfile /dev/stdin {{ gocryptfs_cipher_dir }} {{ gocryptfs_mount }}"
+  when:
+    - opt_mounted.rc != 0
+    - not gocryptfs_store_key_on_target | bool
+  no_log: true
+
+- name: Install the mount helper script
+  ansible.builtin.template:
+    src: mount-opt.sh.j2
+    dest: /root/mount-opt.sh
+    owner: root
+    group: root
+    mode: "0700"
+
+# Auto-mount on boot via systemd. Only meaningful where systemd is the init
+# system (skipped inside plain containers, which is fine — the mount above
+# already ran during provisioning).
+- name: Detect systemd
+  ansible.builtin.stat:
+    path: /run/systemd/system
+  register: systemd_running
+
+- name: Install systemd unit to auto-mount the encrypted volume
+  ansible.builtin.template:
+    src: attackbox-opt.service.j2
+    dest: /etc/systemd/system/attackbox-opt.service
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - gocryptfs_auto_mount | bool
+    - gocryptfs_store_key_on_target | bool
+    - systemd_running.stat.exists
+
+- name: Enable the auto-mount unit
+  ansible.builtin.systemd_service:
+    name: attackbox-opt.service
+    enabled: true
+    daemon_reload: true
+  when:
+    - gocryptfs_auto_mount | bool
+    - gocryptfs_store_key_on_target | bool
+    - systemd_running.stat.exists
+
+- name: Create logs directory inside the encrypted volume
+  ansible.builtin.file:
+    path: "{{ gocryptfs_mount }}/logs"
+    state: directory
+    mode: "0755"

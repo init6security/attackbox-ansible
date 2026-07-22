@@ -1,0 +1,5 @@
+---
+# Rapid7 nightly apt repo. The nightly build tracks master far more closely than
+# the distro package. Installs the omnibus bundle to /opt/metasploit-framework.
+metasploit_key_url: https://apt.metasploit.com/metasploit-framework.gpg.key
+metasploit_repo: "deb [signed-by=/usr/share/keyrings/metasploit.asc] https://apt.metasploit.com/ lucid main"

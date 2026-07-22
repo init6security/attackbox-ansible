@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Test mode (smoke = skip heavy builds, full = everything)"
+        default: smoke
+        type: choice
+        options: [smoke, full]
+
+jobs:
+  deploy:
+    name: deploy (${{ matrix.distro }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [kali, parrot, debian, ubuntu]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install Ansible + collections
+        run: |
+          pip install --upgrade ansible
+          ansible-galaxy collection install -r requirements.yml
+
+      - name: Check FUSE availability
+        run: |
+          sudo modprobe fuse || true
+          ls -l /dev/fuse
+
+      - name: Lint (syntax + ansible-lint)
+        run: |
+          pip install ansible-lint
+          ansible-playbook -i test/inventory.docker.ini playbook.yml --syntax-check
+          ansible-lint || true
+
+      - name: Deploy + verify (${{ matrix.distro }})
+        run: test/run.sh ${{ matrix.distro }} ${{ github.event.inputs.mode || 'smoke' }}

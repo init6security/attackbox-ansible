@@ -1,0 +1,4 @@
+---
+empire_repo: https://github.com/BC-SECURITY/Empire.git
+# Flags: -y assume-yes, -f force-root, -o override-OS-check (needed on Parrot).
+empire_install_flags: "-y -f -o"

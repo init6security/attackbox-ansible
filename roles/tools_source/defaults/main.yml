@@ -1,0 +1,87 @@
+---
+# Distro packages removed before their source builds take over on PATH (Kali/Parrot).
+source_tools_purge:
+  - python3-impacket
+  - impacket-scripts
+  - netexec
+  - crackmapexec
+  - responder
+  - sqlmap
+  - nikto
+  - hashcat
+  - john
+
+# Upstream repos for the always-source-built tools (repoint to a fork if you like).
+impacket_repo: https://github.com/fortra/impacket.git
+netexec_repo: https://github.com/Pennyw0rth/NetExec.git
+responder_repo: https://github.com/lgandx/Responder.git
+sqlmap_repo: https://github.com/sqlmapproject/sqlmap.git
+nikto_repo: https://github.com/sullo/nikto.git
+hashcat_repo: https://github.com/hashcat/hashcat.git
+john_repo: https://github.com/openwall/john.git
+
+# ============================================================================
+# Debian/Ubuntu source installs. On Kali/Parrot these tools come from apt
+# (roles/tools_packages) and the `build_from_source` blocks are skipped. Tools
+# not packaged on ANY distro are installed everywhere (the *_universal lists).
+# ============================================================================
+
+# pipx apps not packaged anywhere -> installed on every distro. `name` is the
+# installed app (used for idempotency); `spec` is what pip installs (PyPI name or
+# a git URL where PyPI is stale/missing/broken on current Python).
+pipx_tools_universal:
+  - { name: ldapdomaindump, spec: ldapdomaindump }
+  - { name: adidnsdump,     spec: adidnsdump }
+  - { name: pywerview,      spec: pywerview }
+  - { name: pypykatz,       spec: pypykatz }
+  - { name: lsassy,         spec: lsassy }
+  - { name: donpapi,        spec: "git+https://github.com/login-securite/DonPAPI.git" }  # PyPI pins old lxml (fails on py3.13)
+  - { name: roadrecon,      spec: roadrecon }                                            # ROADtools (Azure AD)
+
+# pipx apps packaged on Kali/Parrot -> from source on Debian/Ubuntu only.
+pipx_tools_source:
+  - { name: certipy-ad,     spec: certipy-ad }
+  - { name: bloodhound-ce,  spec: bloodhound-ce }                                         # BloodHound CE collector
+  - { name: mitm6,          spec: mitm6 }
+  - { name: coercer,        spec: coercer }
+  - { name: bloodyad,       spec: bloodyAD }
+  - { name: enum4linux-ng,  spec: "git+https://github.com/cddmp/enum4linux-ng.git" }      # not on PyPI
+  - { name: hekatomb,       spec: hekatomb }
+  - { name: theHarvester,   spec: "git+https://github.com/laramies/theHarvester.git" }    # PyPI wheel has no console script
+  - { name: mitmproxy,      spec: mitmproxy }
+
+# `go install` tools not packaged anywhere -> every distro.
+go_tools_universal:
+  - { name: kerbrute, module: "github.com/ropnop/kerbrute@latest" }
+
+# `go install` tools packaged on Kali/Parrot -> from source on Debian/Ubuntu.
+# `produced` is the binary name `go install` emits when it differs from `name`.
+go_tools_source:
+  - { name: nuclei,       module: "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" }
+  - { name: subfinder,    module: "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest" }
+  - { name: dnsx,         module: "github.com/projectdiscovery/dnsx/cmd/dnsx@latest" }
+  - { name: naabu,        module: "github.com/projectdiscovery/naabu/v2/cmd/naabu@latest" }
+  - { name: httpx,        module: "github.com/projectdiscovery/httpx/cmd/httpx@latest" }
+  - { name: gowitness,    module: "github.com/sensepost/gowitness@latest" }
+  - { name: chisel,       module: "github.com/jpillora/chisel@latest" }
+  - { name: ligolo-proxy, produced: proxy, module: "github.com/nicocha30/ligolo-ng/cmd/proxy@latest" }
+  - { name: ligolo-agent, produced: agent, module: "github.com/nicocha30/ligolo-ng/cmd/agent@latest" }
+
+# Ruby gems packaged on Kali/Parrot -> gem install on Debian/Ubuntu.
+gem_tools_source:
+  - evil-winrm
+  - wpscan
+
+# git "run in place" tools packaged on Kali/Parrot -> cloned on Debian/Ubuntu.
+git_tools_source:
+  - { name: krbrelayx, repo: "https://github.com/dirkjanm/krbrelayx.git",
+      bins: [krbrelayx.py, addspn.py, dnstool.py, printerbug.py] }
+  - { name: padbuster, repo: "https://github.com/AonCyberLabs/PadBuster.git",
+      bins: [padBuster.pl] }
+  - { name: targetedKerberoast, repo: "https://github.com/ShutdownRepo/targetedKerberoast.git",
+      bins: [targetedKerberoast.py] }
+
+# Release binaries (Debian/Ubuntu; apt on Kali/Parrot).
+feroxbuster_url: https://github.com/epi052/feroxbuster/releases/latest/download/x86_64-linux-feroxbuster.tar.gz
+sliver_server_url: https://github.com/BishopFox/sliver/releases/latest/download/sliver-server_linux-amd64
+sliver_client_url: https://github.com/BishopFox/sliver/releases/latest/download/sliver-client_linux-amd64

@@ -1,0 +1,44 @@
+# attackbox-ansible — GNU screen configuration
+# Aggressive per-window logging for engagement records. Logs are written to
+# /opt/logs (inside the encrypted gocryptfs volume) — mount /opt before starting
+# screen so they land encrypted.
+
+startup_message off
+defshell -bash
+defutf8 on
+vbell off                       # no flashing visual bell
+defflow off                     # let ^S/^Q reach the running program
+autodetach on                   # detach (never kill) the session on hangup
+altscreen on                    # keep scrollback clean around vim/less/etc.
+defscrollback 50000
+msgwait 2
+
+# Shared sessions during engagements. multiuser on its own grants nobody access
+# — attach permission is only added interactively with ":acladd <user>".
+multiuser on
+
+# --- Logging: capture every window, with periodic in-line timestamps --------
+deflog on
+logtstamp on
+logtstamp after 60
+logfile /opt/logs/screen-%H.%n.%t.%Y%m%d-%0c.log
+logfile flush 1
+
+# --- Activity monitoring ----------------------------------------------------
+defmonitor on
+activity "activity in %t (%n)"
+
+# --- Status line: [ host ][ window list ][ date time ] ----------------------
+hardstatus alwayslastline
+hardstatus string '%{= kG}[ %{G}%H %{g}][%= %{= kw}%?%-Lw%?%{r}(%{W}%n*%f%t%?(%u)%?%{r})%{w}%?%+Lw%?%?%= %{g}][%{B}%Y-%m-%d %{W}%0c %{g}]'
+
+# Preserve the terminal's scrollback after screen exits
+termcapinfo xterm* ti@:te@
+
+# --- Starter windows --------------------------------------------------------
+screen -t shell   0
+screen -t recon   1
+screen -t msf     2
+screen -t nxc     3
+screen -t loot    4
+select 0

@@ -1,0 +1,10 @@
+# Ansible control-node secrets (per-host gocryptfs passphrases, etc.)
+credentials/
+
+# Ansible cruft
+*.retry
+*.pyc
+__pycache__/
+
+# Collections installed locally
+collections/

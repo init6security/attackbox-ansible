@@ -1,0 +1,14 @@
+[Unit]
+Description=Mount encrypted attackbox volume ({{ gocryptfs_mount }}) via gocryptfs
+Documentation=https://github.com/mubix/attackbox-ansible
+After=local-fs.target
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/root/mount-opt.sh
+ExecStop=/bin/fusermount3 -u {{ gocryptfs_mount }}
+
+[Install]
+WantedBy=multi-user.target

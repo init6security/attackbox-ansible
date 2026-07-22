@@ -1,5 +1,17 @@
-# [example-target]
-# 192.168.1.100
+# attackbox-ansible inventory
+#
+# Connect as root. The playbook does not use privilege escalation by default
+# (set attackbox_become=true in your inventory if you connect as a sudo user).
+#
+# Example — remote box over SSH with a key:
+#   [attackbox]
+#   10.200.10.31 ansible_user=root
+#
+# Example — remote box over SSH with a password (needs sshpass on the control node):
+#   [attackbox]
+#   10.200.10.31 ansible_user=root ansible_ssh_pass=changeme
+#
+# The docker-based test harness uses its own inventory (test/inventory.docker.ini).
 
 [attackbox]
-10.200.10.31 ansible_connection=ssh ansible_ssh_user=root ansible_ssh_pass=kaliroot
+10.200.10.31 ansible_user=root

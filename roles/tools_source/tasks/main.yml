@@ -1,0 +1,285 @@
+---
+# ----------------------------------------------------------------------------
+# Source-built tools. These iterate faster than distro maintainers keep up, so
+# we track upstream master. All clones land in the encrypted {{ gocryptfs_mount }}.
+# ----------------------------------------------------------------------------
+- name: Ensure the encrypted volume is mounted before source installs
+  ansible.builtin.command: "mountpoint -q {{ gocryptfs_mount }}"
+  changed_when: false
+  register: opt_mount_gate
+  failed_when: opt_mount_gate.rc != 0
+
+- name: Remove distro copies of source-built tools (source is authoritative)
+  ansible.builtin.apt:
+    name: "{{ source_tools_purge }}"
+    state: absent
+    purge: true
+
+# ---- Impacket (Fortra) ------------------------------------------------------
+- name: Clone Impacket (Fortra)
+  ansible.builtin.git:
+    repo: "{{ impacket_repo }}"
+    dest: "{{ gocryptfs_mount }}/impacket"
+    depth: 1
+    update: true
+  tags: [impacket]
+
+# ---- NetExec ----------------------------------------------------------------
+- name: Clone NetExec
+  ansible.builtin.git:
+    repo: "{{ netexec_repo }}"
+    dest: "{{ gocryptfs_mount }}/netexec"
+    depth: 1
+    update: true
+  tags: [netexec]
+
+# pipx installs (editable, so a `git pull` in the clone updates the tool).
+# Venvs live in the encrypted volume; entry-point wrappers go to a global bin.
+- name: Query installed pipx apps
+  ansible.builtin.command: pipx list --short
+  environment: &pipx_env
+    PIPX_HOME: "{{ pipx_home }}"
+    PIPX_BIN_DIR: "{{ pipx_bin_dir }}"
+  register: pipx_list
+  changed_when: false
+  failed_when: false
+  tags: [impacket, netexec]
+
+- name: Install Impacket via pipx (editable)
+  ansible.builtin.command: "pipx install --editable {{ gocryptfs_mount }}/impacket"
+  environment: *pipx_env
+  when: "'impacket' not in pipx_list.stdout"
+  tags: [impacket]
+
+- name: Install NetExec via pipx (editable)
+  ansible.builtin.command: "pipx install --editable {{ gocryptfs_mount }}/netexec"
+  environment: *pipx_env
+  when: "'netexec' not in pipx_list.stdout and 'NetExec' not in pipx_list.stdout"
+  tags: [netexec]
+
+# ---- Responder (lgandx) -----------------------------------------------------
+- name: Clone Responder
+  ansible.builtin.git:
+    repo: "{{ responder_repo }}"
+    dest: "{{ gocryptfs_mount }}/responder"
+    depth: 1
+    update: true
+  tags: [responder]
+
+- name: Install Responder wrapper on PATH
+  ansible.builtin.copy:
+    dest: "{{ pipx_bin_dir }}/responder"
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      exec python3 {{ gocryptfs_mount }}/responder/Responder.py "$@"
+  tags: [responder]
+
+# ---- sqlmap -----------------------------------------------------------------
+- name: Clone sqlmap
+  ansible.builtin.git:
+    repo: "{{ sqlmap_repo }}"
+    dest: "{{ gocryptfs_mount }}/sqlmap"
+    depth: 1
+    update: true
+  tags: [sqlmap]
+
+- name: Symlink sqlmap on PATH
+  ansible.builtin.file:
+    src: "{{ gocryptfs_mount }}/sqlmap/sqlmap.py"
+    dest: "{{ pipx_bin_dir }}/sqlmap"
+    state: link
+    force: true
+  tags: [sqlmap]
+
+# ---- nikto ------------------------------------------------------------------
+- name: Clone nikto
+  ansible.builtin.git:
+    repo: "{{ nikto_repo }}"
+    dest: "{{ gocryptfs_mount }}/nikto"
+    depth: 1
+    update: true
+  tags: [nikto]
+
+- name: Symlink nikto on PATH
+  ansible.builtin.file:
+    src: "{{ gocryptfs_mount }}/nikto/program/nikto.pl"
+    dest: "{{ pipx_bin_dir }}/nikto"
+    state: link
+    force: true
+  tags: [nikto]
+
+# ---- hashcat (compiled) -----------------------------------------------------
+- name: Clone hashcat
+  ansible.builtin.git:
+    repo: "{{ hashcat_repo }}"
+    dest: "{{ gocryptfs_mount }}/hashcat"
+    recursive: true
+    update: true
+  tags: [hashcat, heavy]
+
+- name: Check whether hashcat is already built
+  ansible.builtin.stat:
+    path: "{{ gocryptfs_mount }}/hashcat/hashcat"
+  register: hashcat_bin
+  tags: [hashcat, heavy]
+
+- name: Build hashcat
+  community.general.make:
+    chdir: "{{ gocryptfs_mount }}/hashcat"
+    jobs: "{{ ansible_processor_vcpus | default(2) }}"
+  when: not hashcat_bin.stat.exists
+  tags: [hashcat, heavy]
+
+- name: Symlink hashcat on PATH
+  ansible.builtin.file:
+    src: "{{ gocryptfs_mount }}/hashcat/hashcat"
+    dest: "{{ pipx_bin_dir }}/hashcat"
+    state: link
+    force: true
+  tags: [hashcat, heavy]
+
+# ---- John the Ripper (jumbo, compiled) --------------------------------------
+- name: Clone John the Ripper (jumbo)
+  ansible.builtin.git:
+    repo: "{{ john_repo }}"
+    dest: "{{ gocryptfs_mount }}/john"
+    depth: 1
+    update: true
+  tags: [john, heavy]
+
+- name: Configure John
+  ansible.builtin.command:
+    cmd: ./configure
+    chdir: "{{ gocryptfs_mount }}/john/src"
+    creates: "{{ gocryptfs_mount }}/john/src/Makefile"
+  tags: [john, heavy]
+
+- name: Check whether John is already built
+  ansible.builtin.stat:
+    path: "{{ gocryptfs_mount }}/john/run/john"
+  register: john_bin
+  tags: [john, heavy]
+
+- name: Build John
+  community.general.make:
+    chdir: "{{ gocryptfs_mount }}/john/src"
+    jobs: "{{ ansible_processor_vcpus | default(2) }}"
+  when: not john_bin.stat.exists
+  tags: [john, heavy]
+
+- name: Symlink John on PATH
+  ansible.builtin.file:
+    src: "{{ gocryptfs_mount }}/john/run/john"
+    dest: "{{ pipx_bin_dir }}/john"
+    state: link
+    force: true
+  tags: [john, heavy]
+
+# ============================================================================
+# Additional offensive tooling.
+# On Kali/Parrot these come from apt (roles/tools_packages). On Debian/Ubuntu
+# they are built from source here. Tools not packaged on ANY distro (the
+# *_universal lists) install everywhere.
+# ============================================================================
+
+# ---- pipx (Python) ----------------------------------------------------------
+- name: Refresh installed pipx app list
+  ansible.builtin.command: pipx list --short
+  environment: *pipx_env
+  register: pipx_all
+  changed_when: false
+  failed_when: false
+  tags: [ad, pipx]
+
+- name: Install pipx tools
+  ansible.builtin.command: "pipx install {{ item.spec }}"
+  environment: *pipx_env
+  loop: "{{ pipx_tools_universal + (pipx_tools_source if build_from_source | bool else []) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: (item.name | lower) not in (pipx_all.stdout | lower)
+  tags: [ad, pipx]
+
+# ---- go install -------------------------------------------------------------
+- name: Install go-based tools
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      go install {{ item.module }}
+      produced="{{ item.produced | default(item.name) }}"
+      if [ "$produced" != "{{ item.name }}" ]; then
+        mv -f "{{ pipx_bin_dir }}/$produced" "{{ pipx_bin_dir }}/{{ item.name }}"
+      fi
+    creates: "{{ pipx_bin_dir }}/{{ item.name }}"
+  environment:
+    GOBIN: "{{ pipx_bin_dir }}"
+    GOFLAGS: "-buildvcs=false"
+    GOTOOLCHAIN: auto
+  loop: "{{ go_tools_universal + (go_tools_source if build_from_source | bool else []) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  tags: [go]
+
+# ---- Ruby gems (Debian/Ubuntu) ---------------------------------------------
+- name: Install gem-based tools
+  community.general.gem:
+    name: "{{ item }}"
+    state: present
+    user_install: false
+  loop: "{{ gem_tools_source }}"
+  loop_control:
+    label: "{{ item }}"
+  when: build_from_source | bool
+  tags: [gem]
+
+# ---- Release binaries (Debian/Ubuntu) --------------------------------------
+- name: Install feroxbuster release binary
+  ansible.builtin.unarchive:
+    src: "{{ feroxbuster_url }}"
+    dest: "{{ pipx_bin_dir }}"
+    remote_src: true
+    include: [feroxbuster]
+    creates: "{{ pipx_bin_dir }}/feroxbuster"
+    mode: "0755"
+  when: build_from_source | bool
+  tags: [feroxbuster]
+
+- name: Install Sliver binaries
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "{{ pipx_bin_dir }}/{{ item.name }}"
+    mode: "0755"
+  loop:
+    - { name: sliver-server, url: "{{ sliver_server_url }}" }
+    - { name: sliver, url: "{{ sliver_client_url }}" }
+  loop_control:
+    label: "{{ item.name }}"
+  when: build_from_source | bool
+  tags: [sliver]
+
+# ---- git "run in place" tools (Debian/Ubuntu) ------------------------------
+- name: Clone git run-in-place tools
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ gocryptfs_mount }}/{{ item.name }}"
+    depth: 1
+    update: true
+  loop: "{{ git_tools_source }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: build_from_source | bool
+  tags: [gitrun]
+
+- name: Install wrappers for git run-in-place tools
+  ansible.builtin.copy:
+    dest: "{{ pipx_bin_dir }}/{{ item.1 | regex_replace('\\.(py|pl)$', '') | lower }}"
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      exec {{ 'perl' if item.1.endswith('.pl') else 'python3' }} {{ gocryptfs_mount }}/{{ item.0.name }}/{{ item.1 }} "$@"
+  loop: "{{ git_tools_source | subelements('bins') }}"
+  loop_control:
+    label: "{{ item.1 }}"
+  when: build_from_source | bool
+  tags: [gitrun]

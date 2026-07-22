@@ -1,0 +1,30 @@
+---
+# Optional (harden_ssh: true). Kept conservative so you don't lock yourself out:
+# root login stays permitted (attack boxes are usually driven as root), but we
+# disable password auth once keys are in place.
+- name: Install authorized_keys for root
+  ansible.posix.authorized_key:
+    user: root
+    key: "{{ item }}"
+    state: present
+  loop: "{{ root_authorized_keys }}"
+  when: root_authorized_keys | length > 0
+
+- name: Permit root SSH login
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PermitRootLogin'
+    line: 'PermitRootLogin prohibit-password'
+    state: present
+    validate: 'sshd -t -f %s'
+  notify: Restart sshd
+
+- name: Disable SSH password authentication (only when keys are present)
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+    state: present
+    validate: 'sshd -t -f %s'
+  when: root_authorized_keys | length > 0
+  notify: Restart sshd

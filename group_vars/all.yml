@@ -1,0 +1,52 @@
+---
+# ============================================================================
+# attackbox-ansible — operator configuration (shared across roles)
+# ----------------------------------------------------------------------------
+# Per-role implementation defaults (package lists, repo URLs) live in
+# roles/<name>/defaults/main.yml. This file holds the cross-cutting knobs you
+# are most likely to tune.
+# ============================================================================
+
+# --- Encrypted volume (gocryptfs) -------------------------------------------
+# eCryptFS did an in-place overlay ("mount -t ecryptfs /opt /opt"); gocryptfs
+# cannot do that — it needs a separate *cipher* directory (encrypted blobs on
+# the real disk) and a plaintext *mountpoint*. Source-built tools and loot live
+# under {{ gocryptfs_mount }} and are therefore encrypted at rest. apt-installed
+# tools land in /usr and stay available even when the volume is unmounted.
+gocryptfs_cipher_dir: /opt-encrypted        # encrypted blobs (real disk)
+gocryptfs_mount: /opt                       # plaintext view (decrypted)
+
+# Store the passphrase on the target (0600, root) so the volume auto-mounts on
+# boot. Set to false to keep the key ONLY on the Ansible control node
+# (credentials/<host>/gocryptfs.txt) and mount manually each boot — stronger
+# at-rest posture, less convenient.
+gocryptfs_store_key_on_target: true
+gocryptfs_keyfile: /root/.attackbox/gocryptfs.key
+gocryptfs_auto_mount: true                  # systemd unit to mount on boot
+
+# --- Unencrypted reference/data location ------------------------------------
+# Large public reference repos don't need to burn space inside the encrypted
+# volume — clone them here (unencrypted). SecLists is a distro package and
+# already lives at /usr/share/seclists, so it is not cloned.
+data_dir: /usr/local/share/attackbox
+
+# --- pipx (used by source-built Python tools) -------------------------------
+# Venvs live in the encrypted volume; entry-point wrappers go to a global bin.
+pipx_home: "{{ gocryptfs_mount }}/pipx"
+pipx_bin_dir: /usr/local/bin
+
+# --- Behaviour toggles ------------------------------------------------------
+# On Debian/Ubuntu the offensive tools are built from source (we never add Kali
+# repos to a non-Kali host). On Kali/Parrot they come from the native packages.
+install_metasploit: true
+metasploit_nightly: true                    # true = Rapid7 nightly; false = distro pkg
+metasploit_db_init: true                    # run `msfdb init` (needs an init system)
+
+# Empire is always cloned from BC Security source. Its setup/install.sh is very
+# heavy (pyenv/poetry/powershell/.NET) — set false to clone only and run the
+# installer yourself later. Runs behind the `heavy` tag either way.
+empire_install: true
+
+# --- Optional SSH hardening (off by default so nobody gets locked out) -------
+harden_ssh: false
+root_authorized_keys: []                    # public keys to install for root

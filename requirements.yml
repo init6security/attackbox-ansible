@@ -1,0 +1,6 @@
+---
+# Install with: ansible-galaxy collection install -r requirements.yml
+collections:
+  - name: community.general      # make module (hashcat/john builds)
+  - name: ansible.posix          # authorized_key (ssh_hardening)
+  - name: community.docker       # docker connection plugin (test harness)

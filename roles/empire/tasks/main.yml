@@ -1,0 +1,42 @@
+---
+# PowerShell Empire, built from BC Security source into the encrypted volume.
+# The clone is cheap and runs every time; the (heavy) installer sets up
+# pyenv/poetry/powershell and is tagged `heavy` so smoke tests can skip it.
+- name: Remove distro powershell-empire (source is authoritative)
+  ansible.builtin.apt:
+    name: powershell-empire
+    state: absent
+    purge: true
+
+- name: Ensure sudo is present (Empire's install.sh calls sudo)
+  ansible.builtin.apt:
+    name: sudo
+    state: present
+
+- name: Ensure the encrypted volume is mounted before cloning Empire
+  ansible.builtin.command: "mountpoint -q {{ gocryptfs_mount }}"
+  changed_when: false
+  register: opt_mount_gate
+  failed_when: opt_mount_gate.rc != 0
+
+- name: Clone PowerShell Empire (BC Security)
+  ansible.builtin.git:
+    repo: "{{ empire_repo }}"
+    dest: "{{ gocryptfs_mount }}/empire"
+    recursive: true
+    depth: 1
+    update: true
+  tags: [empire]
+
+# install.sh is heavy and only marks success (via &&) so a failed run doesn't
+# leave a false "installed" marker behind.
+- name: Install Empire (pyenv/poetry/powershell — heavy)
+  ansible.builtin.shell:
+    cmd: "./setup/install.sh {{ empire_install_flags }} && touch {{ gocryptfs_mount }}/empire/.attackbox-installed"
+    chdir: "{{ gocryptfs_mount }}/empire"
+    creates: "{{ gocryptfs_mount }}/empire/.attackbox-installed"
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    TZ: Etc/UTC
+  when: empire_install | bool
+  tags: [empire, heavy]

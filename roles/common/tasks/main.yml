@@ -14,10 +14,12 @@
 
 - name: Derive install-path facts
   ansible.builtin.set_fact:
-    # Kali/Parrot ship the offensive tools as packages.
+    # Only Kali packages the FULL offensive toolset (its repo is the canonical,
+    # complete one). Parrot's offensive packaging is incomplete (e.g. mitm6 is
+    # missing), so we treat Parrot like Debian/Ubuntu and build the offensive
+    # tools from source there — the same validated pipx/go/gem/git path.
     is_kali_parrot: "{{ is_kali or is_parrot }}"
-    # Debian/Ubuntu do not — build offensive tools from source there.
-    build_from_source: "{{ is_debian or is_ubuntu }}"
+    build_from_source: "{{ is_parrot or is_debian or is_ubuntu }}"
 
 - name: Enable the Ubuntu 'universe' component (needed for many tools)
   ansible.builtin.apt_repository:

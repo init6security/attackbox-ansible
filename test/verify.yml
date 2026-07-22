@@ -65,10 +65,20 @@
       register: cipher_conf
       failed_when: not cipher_conf.stat.exists
 
-    - name: Base tools are on PATH
+    - name: Check base tools are on PATH
       ansible.builtin.shell: "command -v {{ item }}"
       changed_when: false
+      failed_when: false
+      register: cmd_checks
       loop: "{{ expected_commands_base }}"
+
+    - name: Assert all base tools are present (report every missing one)
+      ansible.builtin.assert:
+        that: "cmd_checks.results | selectattr('rc', 'ne', 0) | list | length == 0"
+        fail_msg: >-
+          Missing from PATH:
+          {{ cmd_checks.results | selectattr('rc', 'ne', 0) | map(attribute='item') | list }}
+        success_msg: "All {{ expected_commands_base | length }} base tools on PATH"
 
     - name: Expected directories exist
       ansible.builtin.stat:

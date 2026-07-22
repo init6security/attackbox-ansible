@@ -44,13 +44,17 @@ a sudo user instead.
 
 Ansible facts (`ansible_distribution`) pick the install path automatically:
 
-| | Kali / Parrot | Debian / Ubuntu |
+| | Kali | Parrot / Debian / Ubuntu |
 | --- | --- | --- |
 | System tools (nmap, hydra, smbclient…) | apt | apt |
 | Offensive tools (mitm6, netexec, nuclei…) | apt (native packages) | source (pipx / `go install` / gem / release binary / git) |
 | Tools not packaged anywhere (kerbrute, pypykatz, ldapdomaindump…) | source | source |
 
-No Kali/Parrot repositories are ever added to a Debian/Ubuntu host.
+Only **Kali** packages the full offensive toolset, so only Kali uses apt for it.
+Parrot's offensive packaging is incomplete (e.g. `mitm6` isn't there), so Parrot
+uses the same source path as Debian/Ubuntu. No Kali repositories are ever added
+to a non-Kali host. (BloodHound's GUI + neo4j remain Kali-apt only; the
+`bloodhound-ce` collector is installed everywhere.)
 
 ---
 

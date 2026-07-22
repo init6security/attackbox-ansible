@@ -9,9 +9,9 @@
   delay: 5
   until: pkg_universal is succeeded
 
-# On Kali/Parrot the offensive toolset is packaged — install it. On Debian/Ubuntu
-# these come from source (roles/tools_source) and this block is skipped.
-- name: Install offensive package tools (Kali/Parrot)
+# Only Kali packages the full offensive toolset. On Parrot/Debian/Ubuntu these
+# come from source (roles/tools_source) and this block is skipped.
+- name: Install offensive package tools (Kali)
   ansible.builtin.apt:
     name: "{{ apt_offensive_tools }}"
     state: present
@@ -20,7 +20,7 @@
   retries: 2
   delay: 5
   until: pkg_offensive is succeeded
-  when: is_kali_parrot | bool
+  when: is_kali | bool
 
 - name: Install Kali-only package tools
   ansible.builtin.apt:
